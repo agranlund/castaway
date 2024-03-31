@@ -13,7 +13,7 @@ Castaway/Atari
 
     Anders Granlund,    Castaway/Atari
     Peter Person,       Castaway/Atari
-                        <todo: github link here>
+                        https://github.com/agranlund/castaway
 
     Jeff Mitchell,      Castaway/GP32
                         http://www.codejedi.com/shadowplan/castaway.html
