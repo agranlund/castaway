@@ -3,7 +3,7 @@
 #include "mem.h"
 #include "st.h"
 
-#if defined(AMIGA) || defined(ATARI) || defined(VAMPIRE)
+#if !defined(EXCLUDE_VAMPIRE)
 
 #define DMACONR         *(volatile uint16*)0xdff002
 #define VPOSR           *(volatile uint32*)0xdff004
@@ -27,38 +27,31 @@
 #define COLOR00         *(volatile uint16*)0xdff180
 #define COLOR01         *(volatile uint16*)0xdff182
 
+#define DMAEN    		(1U << 9)
+#define BPLEN    		(1U << 8)
+#define COPEN    		(1U << 7)
 
-#define DMAEN    (1U << 9)
-#define BPLEN    (1U << 8)
-#define COPEN    (1U << 7)
+extern uint16* screenPtr[2];
+extern short screenIdx;
+extern short mach_vampire;
 
-
-#ifdef ATARI
-    extern uint16* screenPtr[2];
-    extern short screenIdx;
-    extern short vampire;
-#else
-    uint16* screenPtr[2];
-    short screenIdx;
-    short vampire;
-#endif
 uint16 oldDMACON;
 uint16 oldINTENA;
 uint16  vstart, vstop;
 uint16* copperPtr[2];
-short cur_shiftmode;
+short vampire_shiftmode;
 
 uint16 Vampire_GetUsbJoystick(unsigned char idx)
 {
     return *((volatile uint16*)(0xdff220+(idx<<1)));
 }
 
-void Amiga_SetScreen(short mode) {
-    cur_shiftmode = mode;
+void Vampire_SetScreen(short mode) {
+    vampire_shiftmode = mode;
 
     uint16 ddfstrt = 0x0038;
     uint16 hstart = 0x81;
-    if (vampire) {
+    if (mach_vampire) {
         ddfstrt -= 8;
         hstart -= 16;
     }
@@ -141,16 +134,16 @@ void Amiga_SetScreen(short mode) {
     DIWSTOP = (((vstop  << 8) & 0xFF00) | (hstop  & 0x00FF));
 }
 
-void Amiga_Blit()
+void Vampire_Blit()
 {
     // mode
-    if (vid_shiftmode != cur_shiftmode) {
-        Amiga_SetScreen(vid_shiftmode);
+    if (vid_shiftmode != vampire_shiftmode) {
+        Vampire_SetScreen(vid_shiftmode);
     }
 
     // screen
     #define REPT10(x) x x x x x x x x x x
-    switch (cur_shiftmode)
+    switch (vampire_shiftmode)
     {
         default:
         case 0:
@@ -250,13 +243,13 @@ void Amiga_Blit()
 }
 
 
-void Amiga_InitScreen(short mode)
+void Vampire_InitScreen()
 {
     oldDMACON = DMACONR;
     oldINTENA = INTENAR;
     vid_rasters = 1;
 
-    cur_shiftmode = 0;
+    vampire_shiftmode = 0;
     screenIdx = 0;
 
     const uint32 screensize = (320 * 200 / 2);
@@ -288,13 +281,13 @@ void Amiga_InitScreen(short mode)
     }
 
     uint16 ddfstrt = 0x0038;
-    if (vampire)
+    if (mach_vampire)
         ddfstrt -= 8;
     uint16 fetches = (320 / 2 / 8) - 1;
     uint16 ddfstop = ddfstrt + (fetches * 8);
 
     uint16 hstart = 0x81;
-    if (vampire)
+    if (mach_vampire)
         hstart -= 16;
     uint16 hstop = hstart + 320;
     hstop = (uint8)(((int16)hstop) - 0x100);
@@ -304,7 +297,7 @@ void Amiga_InitScreen(short mode)
     vstop = (uint8)(((int16)vstop) - 0x100);
 
     // disable saga chunky buffer
-    if (vampire) {
+    if (mach_vampire) {
         SAGA_GFXMODE = 0;
     }
 
@@ -326,47 +319,10 @@ void Amiga_InitScreen(short mode)
 }
 
 
-void Amiga_ReleaseScreen() {
-#ifdef ATARI
+void Vampire_ReleaseScreen() {
     // bitplanes and copper off
     BPLCON0 = 0;
     DMACON = COPEN | BPLEN;
-#endif
 }
 
-#endif // AMIGA || ATARI || VAMPIRE
-
-
-#if defined(AMIGA)
-
-uint32 HostAlloc(uint32 size, short type) {
-    return 0;
-}
-
-void HostFree(uint32 ptr, short type) {
-}
-
-short HostInit() {
-    return 1;
-}
-
-void HostExit() {
-}
-
-void HostEvents() {
-}
-
-void HostVblank() {
-}
-
-void HostSound() {
-}
-
-int main(int args, char* argv[])
-{
-    Castaway(args, argv);
-}
-
-#endif // AMIGA
-
-
+#endif // EXCLUDE_VAMPIRE

@@ -10,6 +10,9 @@ MT = -j24
 atari: dirs tools
 	make -f Makefile_atari.mak $(MT) target="atari"
 
+raven: dirs tools
+	make -f Makefile_atari.mak $(MT) target="raven"
+
 vampire: dirs tools
 	make -f Makefile_atari.mak $(MT) target="vampire"
 

@@ -9,51 +9,8 @@
 #include <mint/falcon.h>
 #include "gem.h"
 
-// alignment. compare mapfile.
-//
-// this time align.2 was faster...
-// probably depends on the initial address of text,data,bss which I think is word aligned.
-//
-// make own loader, or make emutos align the sections to 4bytes?
-//
-
-//
-// check all global bss/data and make sure longs are 4byte aligned!
-// re-arrange and pad as needed.
-//
-// also put related stuff close for better cache-line usage
-// the huge jumptable should be first or last and not in the middle of things.
-//
-
-
-//             Coremark    Cps  dhry2120
-// 68030 @ 50        23      3
-// CT60 @ 60                    110000
-// CT60 @ ??                13
-// CT60 @ 85        193
-// Vampire @ 85     214     16  147333 (Amiga sysinfo)
-// CT60 @ 95        217
-// CT60 @ 105       232
-// Firebee          467     50  466000
-//
-
-//14.69
-//14.95 no host events
-
-// dhrystone:
-
-// CT60 @ 66        
-
-
 #define DEBUG_ALIVE                 0
 #define DEBUG_NOPAL                 0
-
-#if DEBUG_ALIVE
-    #define VAMPIRE_AMIGA_SCREEN    0
-#else
-    #define VAMPIRE_AMIGA_SCREEN    1
-#endif
-
 
 extern short turbo;
 
@@ -72,20 +29,24 @@ uint16  oldVblS;
 uint16  newVblS;
 uint8 oldConterm;
 uint8 initstate;
-short vdo;
-short snd;
-short mch;
+
+uint16 vidcaps;
+uint16 sndcaps;
+short mach_raven;
+
 uint8 keys[128*2];
 uint8 joykeys[128];
 uint8 joys[2*2];
 uint16* screenPtr[2];
+
 int screenIdx;
 int rasterIdx;
 int swapRasters;
 short hostcpu;
-short vampire;
+short mach_vampire;
 uint16 modevals[4];
 uint8* RasterBuffer[2];
+
 
 #define EnableInterrupts()   { __asm__ volatile("move.w #0x2300,sr\n\t" : : : "cc"); }
 #define DisableInterrupts()  { __asm__ volatile("move.w #0x2700,sr\n\t" : : : "cc"); }
@@ -163,19 +124,24 @@ void HostVblank()
             return;
         lastframe = curframe;
     }
+
+	// Vampire
+	if (vidcaps == VIDEO_VAMPIRE) {
+        Vampire_Blit();
+        return;
+	}
+
+	// Nova
+	if (vidcaps == VIDEO_NOVA) {
+		Nova_Blit();
+		return;
+	}
+
 #if DEBUG_ALIVE
     static short curframe = 0;
     curframe++;
     Setcolor(0, curframe & 1 ? 0x0F00 : 0x000F);
 #endif    
-
-
-    #if VAMPIRE_AMIGA_SCREEN
-    if (vampire) {
-        Amiga_Blit();
-        return;
-    }
-    #endif
 
     // resolution change
     if (vid_flag)
@@ -184,15 +150,14 @@ void HostVblank()
         if (vid_shiftmode != oldrez) {
             oldrez = vid_shiftmode;
             uint16 mode = modevals[vid_shiftmode];
-            switch (vdo) {
-                case 0:
-                case 1:
+            switch (vidcaps) {
+				case VIDEO_ST:
                     Setscreen(-1, -1, mode);
                     break;
-                case 2:
+                case VIDEO_TT:
                     EsetShift(mode);
                     break;
-                case 3:
+                case VIDEO_FALCON:
                     VsetMode(mode);
                     break;
             }
@@ -295,15 +260,11 @@ void HostVblank()
     }
     #endif
 
-
-
-
-
     // present
-    if (vdo < 3) {
-        Setscreen(-1, screenPtr[screenIdx], -1);
-    } else {
+    if (vidcaps == VIDEO_FALCON) {
         VsetScreen(-1, screenPtr[screenIdx], -1, -1);
+    } else {
+        Setscreen(-1, screenPtr[screenIdx], -1);
     }
     screenIdx = (screenIdx + 1) & 1;
     if (opt_framepacing) {
@@ -383,7 +344,7 @@ void HostEvents() {
         // legacy joystick
         uint8 status = joys[i];
         // extended vampire gamepad buttons
-        if (vampire) {
+        if (mach_vampire) {
             #define V4JOY_CONNECTED     0x0001
             #define V4JOY_BUTTON_A      0x0002
             #define V4JOY_BUTTON_B      0x0004
@@ -454,34 +415,47 @@ void HostEvents() {
 short HostInit()
 {
     // sound
-    psgmode = vampire ? PSGMODE_XBIOS : PSGMODE_DIRECT;
-    for (short i=0; i<16; i++) {
-        oldSoundRegs[i] = Giaccess(0, i);
-    }
+	psgmode = PSGMODE_EMULATED;
+	if (sndcaps & SND_PSG) {
+		psgmode = mach_vampire ? PSGMODE_XBIOS : PSGMODE_DIRECT;
+	    for (short i=0; i<16; i++) {
+	        oldSoundRegs[i] = Giaccess(0, i);
+	    }
+	}
 
     #if !DISABLE_GRAPHICS
     {
-        // backup palette
-        if (vdo >= 3) {
-            VgetRGB(0, 256, oldPaletteExt);
-        } else if (vdo == 2) {
-            for (short i=0; i<256; i++) {
-                oldPaletteExt[i] = EsetColor(i, 0);
-                EsetColor(i, oldPaletteExt[i]);
-            }
-        }
-        for (short i=0; i<16; i++) {
-            oldPalette[i] = Setcolor(i, 0);
-            Setcolor(i, oldPalette[i]);
-        }
+		// backup falcon palette
+		if (vidcaps == VIDEO_ST || vidcaps == VIDEO_TT || vidcaps == VIDEO_FALCON || vidcaps == VIDEO_VAMPIRE)
+		{
+			if (vidcaps == VIDEO_FALCON) {
+	            VgetRGB(0, 256, oldPaletteExt);
+			}
+			// backup tt palette
+			if (vidcaps == VIDEO_TT) {
+	            for (short i=0; i<256; i++) {
+	                oldPaletteExt[i] = EsetColor(i, 0);
+	                EsetColor(i, oldPaletteExt[i]);
+				}
+			}
+			// backup st palette
+	        for (short i=0; i<16; i++) {
+	            oldPalette[i] = Setcolor(i, 0);
+	            Setcolor(i, oldPalette[i]);
+	        }
+		}
 
         // change screen mode
         oldPhysbase = Physbase();
-        if (vampire && VAMPIRE_AMIGA_SCREEN)
+        if (vidcaps == VIDEO_VAMPIRE)
         {
             oldRez = VsetMode(-1);
-            Amiga_InitScreen();
+            Vampire_InitScreen();
         }
+		else if (vidcaps == VIDEO_NOVA)
+		{
+			Nova_InitScreen();
+		}
         else
         {
             // rasters
@@ -496,17 +470,16 @@ short HostInit()
             screenPtr[0] = (uint16*) mem;
             screenPtr[1] = (uint16*) (mem + screensize);
             WaitVBL();
-            switch (vdo)
+            switch (vidcaps)
             {
-                case 0:
-                case 1:
+                case VIDEO_ST:
                     oldRez = Getrez();
                     modevals[0] = 0;
                     modevals[1] = 1;
                     modevals[2] = 2;
                     Setscreen(-1, screenPtr[screenIdx], modevals[0]);
                     break;
-                case 2:
+                case VIDEO_TT:
                     oldRez = EgetShift();
                     modevals[0] = 0 << 0;
                     modevals[1] = 1 << 8;
@@ -514,7 +487,7 @@ short HostInit()
                     Setscreen(-1, screenPtr[screenIdx], -1);
                     EsetShift(modevals[0]);
                     break;
-                case 3:
+                case VIDEO_FALCON:
                     oldRez = VsetMode(-1);
                     modevals[0] = STMODES|PAL|BPS4|COL40|(oldRez&VGA);
                     modevals[1] = STMODES|PAL|BPS2|COL80|(oldRez&VGA);
@@ -581,9 +554,11 @@ void HostExit()
     if (initstate != 0)
     {
         // sound
-        for (short i=0; i<16; i++) {
-            Giaccess(oldSoundRegs[i], (0x80 | i));
-        }
+		if (sndcaps & SOUND_PSG) {
+	        for (short i=0; i<16; i++) {
+	            Giaccess(oldSoundRegs[i], (0x80 | i));
+	        }
+		}
 
         // interrupts and vectors
         DisableInterrupts();
@@ -604,38 +579,48 @@ void HostExit()
         // screen
         #if !DISABLE_GRAPHICS
         {
-            if (vampire && VAMPIRE_AMIGA_SCREEN)
-            {
-                Amiga_ReleaseScreen();
-            }
-
             WaitVBL();
-            switch (vdo)
+            switch (vidcaps)
             {
-                case 0:
-                case 1:
+                case VIDEO_ST:
                     Setscreen(-1, oldPhysbase, oldRez);
                     break;
-                case 2:
+                case VIDEO_TT:
                     Setscreen(-1, oldPhysbase, -1);
                     EsetShift(oldRez);
                     break;
-                case 3:
+				case VIDEO_FALCON:
                     VsetScreen(-1, oldPhysbase, -1, -1);
                     VsetMode(oldRez);
                     break;
+				case VIDEO_VAMPIRE:
+	                Vampire_ReleaseScreen();
+	                VsetScreen(-1, oldPhysbase, -1, -1);
+	                VsetMode(oldRez);
+					break;
+				case VIDEO_NOVA:
+					Nova_ReleaseScreen();
+					break;
+				
             }
 
             // palette
-            for (short i=0; i<16; i++) {
-                Setcolor(i, oldPalette[i]);
-            }
-            if (vdo >= 3) {
-                VsetRGB(0, 256, oldPaletteExt);
-            } else if (vdo == 2) {
-                for (short i=0; i<256; i++)
-                    EsetColor(i, oldPaletteExt[i]);
-            }
+			if (vidcaps == VIDEO_ST || vidcaps == VIDEO_TT || vidcaps == VIDEO_FALCON)
+			{
+				// st palette
+	            for (short i=0; i<16; i++) {
+	                Setcolor(i, oldPalette[i]);
+	            }
+				// falcon palette
+	            if (vidcaps == VIDEO_FALCON) {
+	                VsetRGB(0, 256, oldPaletteExt);
+	            }
+				// tt palette
+				else if (vidcaps == VIDEO_TT) {
+	                for (short i=0; i<256; i++)
+	                    EsetColor(i, oldPaletteExt[i]);
+	            }
+			}
         }
         #endif
         initstate = 0;

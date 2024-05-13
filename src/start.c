@@ -6,11 +6,12 @@
 #include "gem.h"
 
 extern void (*const jmp_table[8192*8])();
-extern short vdo;
-extern short snd;
-extern short mch;
+
 extern short hostcpu;
-extern short vampire;
+extern short mach_vampire;
+extern short mach_raven;
+extern uint16 vidcaps;
+extern uint16 sndcaps;
 
 int g_args;
 char** g_argv;
@@ -29,19 +30,56 @@ int supermain()
     DBG("jmp_table:  %08x", (uint32) jmp_table);
     DBG("Opc0c0:     %08x", (uint32) Opc0c0);
 
+    uint32 cookie, nova;
+	uint16 vdo = 0; uint16 snd = 0; uint16 mch = 0;
+    cookie = 0x0000; Getcookie('_CPU', &cookie); hostcpu = (uint16) cookie;
+    cookie = 0x0000; Getcookie('_SND', &cookie); snd = (uint16) cookie;
+    cookie = 0xFFFF; Getcookie('_VDO', &cookie); vdo = (cookie >> 16);
+    cookie = 0xFFFF; Getcookie('_MCH', &cookie); mch = (cookie >> 16);
+	nova = 0; Getcookie('NOVA', &nova);
 
-    uint32 cookie;
-    cookie = 0; Getcookie('_CPU', &cookie); hostcpu = (int16) cookie;
-    cookie = 0; Getcookie('_SND', &cookie); snd = (int16) cookie;
-    cookie = 0; Getcookie('_VDO', &cookie); vdo = cookie >> 16;
-    cookie = 0; Getcookie('_MCH', &cookie); mch = cookie >> 16;
-    if (mch == 6) {
-        hostcpu = 80;
-        vdo = 3;
-        #ifndef COLDFIRE
-        vampire = 1;
-        #endif
-    }
+#ifndef COLDFIRE
+	// todo: is there a better way to identify Vampire?
+	mach_vampire = (mch == 6) ? 1 : 0;
+#else
+	mach_vampire = 0;
+#endif
+
+	// todo: detect raven at runtime
+#ifdef RAVEN	
+	mach_raven = 1;
+#endif
+
+	// video mode
+	switch (vdo) {
+		case 0:
+		case 1:
+			vidcaps = VIDEO_ST;
+			break;
+		case 2:
+			vidcaps = VIDEO_TT;
+			break;
+		case 3:
+			vidcaps = VIDEO_FALCON;
+			break;
+		default:
+			vidcaps = VIDEO_OFF;
+	}
+	if (mach_vampire) {
+		vidcaps = VIDEO_VAMPIRE;
+	}
+	if (nova) {
+		vidcaps = VIDEO_NOVA;
+	}
+
+	// sound mode
+	sndcaps = SOUND_OFF;
+	if (snd & 1)
+		sndcaps |= SOUND_PSG;
+
+	DBG("vidcaps = %d", vidcaps);
+	DBG("sndcaps = %d", sndcaps);
+
 
     if (hostcpu < 20) { HALT("This program requires 68020+"); return -1; }
     #if defined(AC68080)
@@ -52,7 +90,9 @@ int supermain()
     #endif
 
     StartEmulator(g_args, g_argv);
+	DBG("HostExit");
     HostExit();
+	DBG("Main");
     return 0;
 }
 

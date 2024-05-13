@@ -30,6 +30,8 @@
 #include "st.h"
 #include "mem.h"
 
+extern short mach_raven;
+
 //static const int samvol[16]={0,0,0,1,1,1,2,3,5,7,11,17,25,38,57,85};
 #define CARTBASE    0xFA0000L
 #define CARTSIZE    0x020000L
@@ -219,8 +221,15 @@ void SetMemPL(unsigned long address, unsigned long value)
 
 int MemInit(void)
 {
-    // allocate 16mb (aligned at 16mb) for ST address map
-    cpup->membase = membase = (int8*) AllocateMem(0x01000000, 0x01000000, MEM_FAST);
+
+	if (mach_raven) {
+		// use 24bit emulator space
+    	cpup->membase = membase = (int8*) 0x04000000;
+	} else {
+		// allocate 16mb (aligned at 16mb) for ST address map
+		cpup->membase = membase = (int8*) AllocateMem(0x01000000, 0x01000000, MEM_FAST);
+	}
+
     if (!membase) {
 
         DBG("Failed allocating ST mem");

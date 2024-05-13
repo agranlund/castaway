@@ -141,7 +141,7 @@ void AtariST()
             totalseconds++;
             if (totalseconds > 19) {
                 DBG("%ld average", averagecycles / 20);
-                exit(0);
+				exit(0);
             }
             timenow = *((volatile uint32*)0x4ba);
             timeend = timenow + (1 * 200);
@@ -447,7 +447,6 @@ uint32 heapAlloc(short i, uint32 size, uint32 align, short type)
 }
 
 uint32 AllocateMem(uint32 size, uint32 align, uint16 type) {
-
     uint32 ptr = 0;
     for (short i=0; (i<maxheaps) && (ptr == 0); i++) {
         ptr = heapAlloc(i, size, align, type);

@@ -27,6 +27,18 @@ typedef unsigned char   uint8;
 typedef unsigned short  uint16;
 typedef unsigned int    uint32;
 
+
+#define VIDEO_OFF			0
+#define VIDEO_ST			1
+#define VIDEO_TT			2
+#define VIDEO_FALCON		3
+#define VIDEO_VAMPIRE		4
+#define VIDEO_NOVA			5
+
+#define SOUND_OFF			0
+#define SOUND_PSG			1
+#define SOUND_DMA			2
+
 // castaway.c
 #define MEM_CHIP 0
 #define MEM_FAST 1
