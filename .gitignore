@@ -2,6 +2,7 @@
 src/obj/*
 mapfile
 *.o
+*.prg
 /src/tools/jmptable
 /src/tools/mkdisk
 /src/tools/rdsingle
