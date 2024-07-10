@@ -12,6 +12,7 @@ uint32 nova_physbase;
 nova_xcb_t *nova_xcb;
 nova_resolution_t nova_modes[3];	// low, med, high
 uint32* nova_cmpbuffer;
+static uint32 framenum = 0;
 
 void Nova_SetScreen(short mode)
 {
@@ -38,10 +39,21 @@ void Nova_Blit()
         Nova_SetScreen(vid_shiftmode);
     }
 
+    // wait vbl
+    if (opt_framepacing) {
+        while(1) {
+            uint32 curframe = *((volatile uint32*)0x00000462);
+            if (curframe != framenum) {
+                framenum = curframe;
+                break;
+            }
+        }
+    }
+
 	// screen
 	register uint32* cmp = (uint32*) nova_cmpbuffer;
     register uint32* src = (uint32*) (membase + (vid_baseh << 16) + (vid_basem << 8));
-	register uint32* dst = (uint8*) nova_physbase;
+	register uint32* dst = (uint32*) nova_physbase;
 	for (short y=0; y<200; y++)
 	{
 		for (short x=0; x<20; x++)
@@ -109,27 +121,23 @@ void Nova_Blit()
 		}
 	}
 
-
     // flip
     screenIdx = (screenIdx + 1) & 1;
-    if (opt_framepacing) {
-        //while(((*((volatile uint32*)0xdff004)) & 0x1ff00) < ((vstart + 200) << 8)) {}
-    }
 }
 
 
 void Nova_LoadModes()
 {
-	memset(nova_modes, 0, 3 * sizeof(nova_resolution_t));
 	char filename[32];
-	sprintf(&filename[0], "%c:\\auto\\sta_vdi.bib", 'A'+ *((volatile unsigned short *)0x446));
+    strcpy(filename, "c:\\auto\\sta_vdi.bib");
+    filename[0] = 'a'+ *((volatile unsigned short *)0x446);
+	memset(nova_modes, 0, 3 * sizeof(nova_resolution_t));
 
 	int fhandle = open(filename, 0);
 	if (fhandle < 0) {
 		DBG("Failed opening sta_vdi.bib");
 		return;
 	}
-
 	int fsize = lseek(fhandle, 0, SEEK_END);
 	lseek(fhandle, 0, SEEK_SET);
 
@@ -139,7 +147,6 @@ void Nova_LoadModes()
 		read(fhandle, &res, sizeof(nova_resolution_t));
 		res.dummy1 = 0;
 		//DBG("mode: %s : %d,%d,%d", res.name, res.mode, res.real_x, res.real_y);
-
 		if (res.mode == 2)
 		{
 			if (res.real_x == 319 && res.real_y == 199)
@@ -167,7 +174,7 @@ void Nova_InitScreen()
 	if (nova_xcb == 0)
 		return;
 
-	nova_cmpbuffer = AllocateMem(64 * 1024, 16, MEM_FAST);
+	nova_cmpbuffer = (uint32*) AllocateMem(64 * 1024, 16, MEM_FAST);
 	nova_physbase = (uint32) oldPhysbase;
 	memset((void*)nova_physbase, 0, 320*200/2);
 
