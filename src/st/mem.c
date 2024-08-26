@@ -224,7 +224,7 @@ int MemInit(void)
 
 	if (mach_raven) {
 		// use 24bit emulator space
-    	cpup->membase = membase = (int8*) 0x04000000;
+    	cpup->membase = membase = (int8*) 0x41000000;
 	} else {
 		// allocate 16mb (aligned at 16mb) for ST address map
 		cpup->membase = membase = (int8*) AllocateMem(0x01000000, 0x01000000, MEM_FAST);
