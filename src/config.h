@@ -56,15 +56,15 @@ extern void HostSound();
 extern short HostInit();
 extern void HostExit();
 
-#ifndef DISTBUILD
-#define DBG(...)    { printf( __VA_ARGS__); printf("\n\r"); }
+#ifdef DEBUGBUILD
+#define DBG(...)    { printf( __VA_ARGS__); printf("\n\r"); fflush(0); }
 #define HALT(...)   { DBG(__VA_ARGS__); exit(1); }
 #else
 #define DBG(...)
 #define HALT(...)
 #endif
 
-#ifndef DISTBUILD
+#ifdef DEBUGBUILD
     #ifndef DEBUG_SPEED
     #define DEBUG_SPEED         0
     #endif

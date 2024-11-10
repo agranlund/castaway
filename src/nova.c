@@ -13,6 +13,10 @@ nova_xcb_t *nova_xcb;
 uint32* nova_cmpbuffer;
 static uint32 framenum = 0;
 
+extern int16 vdiHandlep;
+static uint32 oldpalsize = 0;
+static uint16 oldpal[256*3];
+
 typedef struct
 {
     uint16 st_width;
@@ -29,6 +33,8 @@ typedef struct
 
 screenmode_t screenmodes[3];
 nova_resolution_t oldres;
+
+
 
 static inline void Nova_SetNovaScreen(nova_resolution_t* res) {
     // set resolution
@@ -294,10 +300,26 @@ void Nova_InitScreen()
     for (int i=0; i<3; i++) {
         DBG("STMODE %d : %d %d %d", i, screenmodes[i].nova_width, screenmodes[i].nova_height, screenmodes[i].nova_bpp);
     }
+   
+    // backup palette
+    oldpalsize = ((vdiHandlep >= 0) && (nova_xcb->planes <= 8)) ? (1 << nova_xcb->planes) : 0;
+    for (int16 i = 0; i < oldpalsize; i++) {
+        vq_color(vdiHandlep, i, 1, &oldpal[i * 3]);
+    }
+
+    // set screenmode
 	Nova_SetAtariScreen(0);
 }
 
 void Nova_ReleaseScreen()
 {
+    // restore screenmode
     Nova_SetNovaScreen(&oldres);
+
+    // restore palette
+    extern int16 vdiHandlep;
+    for (int16 i = 0; i < oldpalsize; i++) {
+        vs_color(vdiHandlep, i, &oldpal[i * 3]);
+    }
 }
+

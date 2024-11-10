@@ -12,6 +12,9 @@ extern short mach_vampire;
 extern short mach_raven;
 extern uint16 vidcaps;
 extern uint16 sndcaps;
+int16 appId;
+int16 aesVersion;
+int16 vdiHandlep;
 
 int g_args;
 char** g_argv;
@@ -36,6 +39,7 @@ int supermain()
     cookie = 0x0000; Getcookie('_SND', &cookie); snd = (uint16) cookie;
     cookie = 0xFFFF; Getcookie('_VDO', &cookie); vdo = (cookie >> 16);
     cookie = 0xFFFF; Getcookie('_MCH', &cookie); mch = (cookie >> 16);
+    cookie = 0x0000; Getcookie('RAVN', &cookie); mach_raven = (cookie == 0) ? 0 : 1;
 	nova = 0; Getcookie('NOVA', &nova);
 
 #ifndef COLDFIRE
@@ -43,11 +47,6 @@ int supermain()
 	mach_vampire = (mch == 6) ? 1 : 0;
 #else
 	mach_vampire = 0;
-#endif
-
-	// todo: detect raven at runtime
-#ifdef RAVEN	
-	mach_raven = 1;
 #endif
 
 	// video mode
@@ -86,7 +85,7 @@ int supermain()
     if (hostcpu != 80) { HALT("This program requires 68080"); return -1; }
     #endif
     #if defined(VAMPIRE)
-    if (!vampire) { HALT("This program requires Vampire"); return -1; }
+    if (!mach_vampire) { HALT("This program requires Vampire"); return -1; }
     #endif
 
     StartEmulator(g_args, g_argv);
@@ -99,11 +98,11 @@ int supermain()
 
 #define C_UNION(x) { (uint32) x }
 OBJECT rs_menu[] = {
-	{ -1,  1,  4, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      0,0,    160,25 },
-	{  4,  2,  2, G_BOX,    OF_NONE, OS_NORMAL,     C_UNION(0x1100L),                   0,0,    160,769 },
-	{  1,  3,  3, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      2,0,    9,769 },
-	{  2, -1, -1, G_TITLE,  OF_NONE, OS_NORMAL,     C_UNION(" Castaway"),               0,0,    9,769 },
-	{  0,  5,  5, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      0,769,  160,19 },
+	{ -1,  1,  4, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      0,0,    21,19 },
+	{  4,  2,  2, G_BOX,    OF_NONE, OS_NORMAL,     C_UNION(0x1100L),                   0,0,    21,19 },
+	{  1,  3,  3, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      2,0,    1,19 },
+	{  2, -1, -1, G_TITLE,  OF_NONE, OS_NORMAL,     C_UNION(" "),                       0,0,    1,19 },
+	{  0,  5,  5, G_IBOX,   OF_NONE, OS_NORMAL,     C_UNION(0x0L),                      0,23,   21,19 },
 	{  4,  6, 13, G_BOX,    OF_NONE, OS_NORMAL,     C_UNION(0xFF1100L),                 2,0,    21,8 },
 	{  7, -1, -1, G_STRING, OF_NONE, OS_NORMAL,     C_UNION("  About"),                 0,0,    21,1 },
 	{  8, -1, -1, G_STRING, OF_NONE, OS_DISABLED,   C_UNION("---------------------"),   0,1,    21,1 },
@@ -117,26 +116,40 @@ OBJECT rs_menu[] = {
 
 int main(int args, char* argv[])
 {
+#ifdef DEBUGBUILD
+    Fforce(1, -2);
+#endif
+
 	aes_global[0] = 0;
-	int16 appId = appl_init();
-	int16 aesVersion = aes_global[0];
-    int16 vdiHandle = 0;
-    int16 wndScreen = 0;
+	appId = appl_init();
+	aesVersion = aes_global[0];
+    vdiHandlep = -1;
+    int16 vdiHandlev = -1;
+    int16 wndScreen = -1;
     int16 width, height;
-	if (appId && (aesVersion > 0))
+    int16 oldpalsize = 0;
+    int16 black[3] = {0,0,0};
+    int16 desk_x, desk_y, desk_w, desk_h;
+
+	if ((appId >= 0) && (aesVersion > 0))
 	{
         int16 dummy; int16 work_in[11] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2}; int16 work_out[57];
-        vdiHandle = graf_handle(&dummy, &dummy, &dummy, &dummy);
-        if (vdiHandle > 0) {
-            v_opnvwk(work_in, &vdiHandle, work_out);
-            width = work_out[0] + 1;
-            height = work_out[1] + 1;
-            wndScreen = wind_create(0, 0, 0, width, height);
-            if (wndScreen) {
+
+        vdiHandlep = graf_handle(&dummy, &dummy, &dummy, &dummy);
+        if (vdiHandlep >= 0) {
+            vdiHandlev = vdiHandlep;
+            if (vdiHandlev >= 0) {
+                v_opnvwk(work_in, &vdiHandlev, work_out);
+                width = work_out[0] + 1;
+                height = work_out[1] + 1;
+                wndScreen = wind_create(0, 0, 0, width, height);
                 wind_open(wndScreen, 0, 0, width, height);
             }
         }
+
         menu_bar(rs_menu, 1);
+        wind_update(BEG_UPDATE);
+        wind_update(BEG_MCTRL);
         graf_mouse(M_OFF, 0);
     }
 
@@ -144,11 +157,19 @@ int main(int args, char* argv[])
     g_argv = argv;
     Supexec(supermain);
     
-    if (appId) {
+    if (appId >= 0) {
         if (aesVersion > 0) {
+            if (wndScreen >= 0) {
+                wind_close(wndScreen);
+            }
+            if (vdiHandlev >= 0) {
+                v_clsvwk(vdiHandlev);
+            }
             menu_bar(rs_menu, 0);
             graf_mouse(M_ON, 0);
             graf_mouse(ARROW, 0);
+            wind_update(END_MCTRL);
+            wind_update(END_UPDATE);
         }
         appl_exit();
     }

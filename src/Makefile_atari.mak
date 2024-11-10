@@ -1,7 +1,6 @@
 # ------------------------------------
 # Castaway/Atari
 # ------------------------------------
-APPLICATION = ../castaway.prg
 CC = m68k-atari-mint-gcc
 GEN = tools/jmptable
 
@@ -13,20 +12,27 @@ ifeq ($(target),)
 target=atari
 endif
 
+BINDIR 		= ../bin
+APPLICATION 	= $(BINDIR)/$(target)/castaway.prg
+
 ifeq ($(target),atari)
+APPLICATION = $(BINDIR)/castaway.prg
 TARGETDEFS = -DATARI
 CPUFLAG=-m68020-60
 CPULINK=-m68000
 
-else ifeq ($(target),firebee)
+else
+APPLICATION = $(BINDIR)/$(target)/castaway.prg
+
+ifeq ($(target),firebee)
 TARGETDEFS = -DATARI -DFIREBEE -DCOLDFIRE
 CPUFLAG=-mcpu=5475
 CPULINK=-mcpu=5475
 
 else ifeq ($(target),vampire)
 TARGETDEFS = -DATARI -DVAMPIRE -DAC68080
-CPUFLAG=-m68060
-CPULINK=-m68060
+CPUFLAG=-m68040
+CPULINK=-m68040
 
 else ifeq ($(target),raven)
 TARGETDEFS = -DATARI -DRAVEN
@@ -38,6 +44,7 @@ TARGETDEFS = -DATARI -DCOLDFIRE
 CPUFLAG=-m68020-60
 CPULINK=-m68000
 
+endif
 endif
 
 ifeq ($(build),dist)
@@ -126,6 +133,7 @@ all: $(APPLICATION)
 GLOBALDEPENDS=Makefile_atari.mak config.h cpu/op68k.h cpu/68000.h cpu/proto.h
 
 $(APPLICATION): $(OBJS) $(GLOBALDEPENDS)
+	mkdir -p $(BINDIR)/$(target)
 	$(CC) $(CPULINK) $(CFLAGS) -o $@ $(LINKOBJS) $(LFLAGS)
 	tools/stripx -v -f -s $(APPLICATION)
 

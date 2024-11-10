@@ -2,7 +2,7 @@
 #include "68000.h"
 #include "mem.h"
 #include "st.h"
-
+#include "setjmp.h"
 
 #define ENABLE_FRAMEPACING      0
 #define ALLOW_FRAMESKIP         0
@@ -31,6 +31,7 @@ char g_disk_name [ 252 ];
 char g_disk_ext[ 4 ];
 int  opt_framepacing;
 int g_running;
+jmp_buf g_term_jumpbuf;
 
 
 // a5 is permanently reserved as emulated PC (in host address space)
@@ -259,6 +260,9 @@ void AtariST()
                 {
                     // Handle event outside the emulation
                     HostEvents();
+                    if (!g_running) {
+                        break;
+                    }
 
                     // Update ikbd
                     {
@@ -413,6 +417,8 @@ void AtariST()
                 cpup->recalc_int=0;
 		}
     }
+    DBG("Exit emulation");
+    longjmp(g_term_jumpbuf, 1);
 }
 
 
@@ -506,6 +512,7 @@ int InsertDisk(int num) {
 
 void QuitEmulator()
 {
+    DBG("QuitEmu");
     g_running = 0;
 }
 
@@ -535,6 +542,15 @@ int StartEmulator(int args, char* argv[])
 
     DBG("Run");
     opt_framepacing = FRAMEPACING_DEFAULT;
-    AtariST();
+
+
+    if (setjmp(g_term_jumpbuf) == 0)
+    {
+        AtariST();
+    }
+
+
+
+    DBG("Run done");
     return 0;
 }

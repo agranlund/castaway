@@ -378,7 +378,7 @@ void HostEvents() {
     }
 
     // ctrl+alt?
-    short hostCtrl = keys[0x1d] | keys[0x38];
+    short hostCtrl = ((keys[0x1d] != 0) && (keys[0x38] != 0)) ? 1 : 0;
     
     // keyboard
     if (keys[0]) {

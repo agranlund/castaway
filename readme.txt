@@ -31,6 +31,9 @@ Instructions:
 -------------
   Put a TOS 1.xx rom image next to castaway.prg and call it "tos.img".
 
+  This package comes with EmuTOS1.3 but replacing it with an
+  official Atari TOS image is highly recommended.
+
   Drag and drop an .ST or .MSA disk image onto castaway.prg to start.
   Alternatively, install castaway as an application that
   automatically launches .ST images when double clicked.
