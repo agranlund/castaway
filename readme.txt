@@ -2,8 +2,8 @@
 Castaway/Atari
 --------------
     "Makes old crap run even older crap"
-    Useful on Atari CT60, Vampire, or other fast Atari compatibles.
-    v230124
+    Useful on Atari CT60, Vampire, Raven, or other fast Atari compatibles.
+    v241110
 
     Castaway is distributed under the GPL, version 2 or at your
     option any later version. See license.txt for details.
@@ -29,10 +29,13 @@ Castaway/Atari
 
 Instructions:
 -------------
-  Put a TOS 1.xx rom image next to castaway.prg and call it "tos.img".
 
   This package comes with EmuTOS1.3 but replacing it with an
   official Atari TOS image is highly recommended.
+
+  To do so, put a TOS 1.xx rom image next to castaway.prg and
+  and rename it to "tos.img".
+  TOS1.2 or TOS1.4 will be most compatible.
 
   Drag and drop an .ST or .MSA disk image onto castaway.prg to start.
   Alternatively, install castaway as an application that
@@ -61,6 +64,9 @@ Platform specific:
 Atari:
  - Rasters are not yet emulated
 
+Raven:
+ - Generally same status as a normal Atari
+
 Firebee:
  - Not yet working
 
@@ -72,6 +78,12 @@ Vampire:
      Atari forum on apollo-core.com
      AtariV4 and ApolloTeam on Discord.
 
+
+Other clones may or may not work.
+Graphics cards are supported through NOVA API and Castaway will try
+to use the best suitable mode you have defined in STA_VDI.BIB
+For best result you may want to create a low resolution mode
+such as 320x200x8bpp or thereabouts.
 
 
 This sucks, nothing works!
