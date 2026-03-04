@@ -44,7 +44,7 @@ static inline void Nova_SetNovaScreen(nova_resolution_t* res) {
             "movel	%1,%%a1\n\t"
             "jsr	%%a1@"
         : : "g"(res), "g"(nova_xcb->p_chres)
-        : "d0", "d1", "d2", "a0", "a1", "cc", "memory"
+        : "d0", "d1", "d2", "a0", "a1", "a2", "cc", "memory"
     );
 
     // vsync
@@ -52,7 +52,7 @@ static inline void Nova_SetNovaScreen(nova_resolution_t* res) {
 		"movel	%0,%%a0\n\t"
 		"jsr	%%a0@"
 		: : "g"(nova_xcb->p_vsync)
-		: "d0", "d1", "d2", "a0", "a1", "cc", "memory"
+		: "d0", "d1", "d2", "a0", "a1", "a2", "cc", "memory"
 		);
 }
 
@@ -172,7 +172,7 @@ void Nova_Blit()
 					"movel	%2,%%a1\n\t"
 					"jsr	%%a1@"
 				: : "g"(i), "g"(color), "g"(nova_xcb->p_setcol)
-				: "d0", "d1", "d2", "a0", "a1", "cc", "memory"
+				: "d0", "d1", "d2", "a0", "a1", "a2", "cc", "memory"
 			);
 		}
 	}
