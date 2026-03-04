@@ -38,7 +38,7 @@ typedef struct {
 unsigned char   fdc_buffer[8000] = {0};
 unsigned char   gap1[38+2]={0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xA1,0xA1,0xfe,0xa1,0,0};
 unsigned char   gap2[38+2]={0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x4e,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xA1,0xA1,0xfb,0xa1,0,0};
-struct Disk     disk[2] = { { DISKA, NULL, 0, SIDES, TRACKS, SECTORS, SECSIZE, 0, 0, 0 }, { DISKB, NULL, 0, SIDES, TRACKS, SECTORS, SECSIZE, 0, 1, 0 }, };
+struct Disk     disk[2] = { { DISKA, NULL, 0, SIDES, TRACKS, SECTORS, SECSIZE, 0, 0, 0, 0 }, { DISKB, NULL, 0, SIDES, TRACKS, SECTORS, SECSIZE, 0, 1, 0, 0 }, };
 
 // bss section
 short           fdc_transfert, fdc_active;
@@ -55,24 +55,34 @@ int             discpos[2];
 
 int discread(unsigned char *buf,int a,int len,int discn)
 {
-    int i;
-    uint8 val1,val2;
-    #ifdef LITTLE_ENDIAN
-    uint8* dbuf = buf;
-    #endif
-
-    for (i=0;i<len;i++)
-        *buf++=disc[discn][discpos[discn]+i];
-
-    #ifdef LITTLE_ENDIAN
-    for (i=0; i<len; i+=2) {
-        val1 = dbuf[i];
-        val2 = dbuf[i+1];
-        dbuf[i] = val2;
-        dbuf[i+1] =val1;
+    if (disk[discn].phys) {
+        int start = discpos[discn] / 512;
+        int end = (discpos[discn] + len) / 512;
+        int count = (end - start);
+        int ret = Rwabs(0, &disc[discn][start*512], count, start, 0);
     }
-    #endif
-    discpos[discn]=discpos[discn]+i;
+
+    {
+        int i;
+   
+        #ifdef LITTLE_ENDIAN
+        uint8 val1,val2;
+        uint8* dbuf = buf;
+        #endif
+
+        for (i=0;i<len;i++)
+            *buf++=disc[discn][discpos[discn]+i];
+
+        #ifdef LITTLE_ENDIAN
+        for (i=0; i<len; i+=2) {
+            val1 = dbuf[i];
+            val2 = dbuf[i+1];
+            dbuf[i] = val2;
+            dbuf[i+1] =val1;
+        }
+        #endif
+    }
+    discpos[discn] += len;
     fdc_active |= ( discn + 1 ); // jeff
     return len;
 }
@@ -187,10 +197,10 @@ int MSA_UnCompress(unsigned char *pBuffer)
 }
 
 
-int 		   FDCInit(int i)
+int FDCInit(int i)
 {
-	unsigned char *buf;
-	int len,len2,calcsides,calcsectors,calctracks,badbootsector;
+    unsigned char *buf;
+    int badbootsector = 0;
 
     if (msabuff == 0) {
         msabuff = (unsigned char*) AllocateMem(1050L*1024L, 16, MEM_FAST);
@@ -202,85 +212,112 @@ int 		   FDCInit(int i)
         HALT("Couldn't alloc memory for disks..." );
     }
 
-	discpos[i]=0;
-	if (NULL != (disk[i].file = fopen (disk[i].name, "r+b")))
-    {
-		buf=&disc[i][0];
-		
-        fseek(disk[i].file,0,SEEK_END);
-        len=ftell(disk[i].file);
-        fseek(disk[i].file,0,SEEK_SET);
-        fread(buf,1,len,disk[i].file);
-        fclose(disk[i].file);
+    disk[i].phys = 0;
+    discpos[i]=0;
 
-		disk[i].disksize = len;
-		len2=MSA_UnCompress(buf);
-		if (len2) len=len2;
-		disk[i].head = 0;		
-		disk[i].stt = 0;
-#if 0
-		if(*(int *)(buf)==0x4d455453){
-			badbootsector=0;
-			disk[i].tracks = *(unsigned short *)(buf + 10);
-			disk[i].sides = *(unsigned short *) (buf + 12);
-			disk[i].stt = 1;
-			if (*(unsigned short*)(buf + 8)!=1) {
-                return 2;
-            }
-		} else
-#endif
-        {
-			disk[i].head = 0;
-			disk[i].sides = (int) *(buf + 26);
-			disk[i].sectors = (int) *(buf + 24);
-			disk[i].secsize = 512; //(int) ((*(buf + 12) << 8) | *(buf + 11));
-			if (disk[i].sectors && disk[i].sides) {
-				disk[i].tracks = (int) ((*(buf + 20) << 8) | *(buf + 19)) / (disk[i].sectors * disk[i].sides);
-            }
-			
-			// Second Check more precise 
-			if (len> (500*1024)) calcsides = 2;
-			else calcsides = 1;
+    if (stricmp(disk[i].name, "rwabs.a") == 0) {
+        buf=&disc[i][0];
+        disk[i].phys = 1;
 
-			if (!(((len/calcsides)/512)%9)&&(((len/calcsides)/512)/9)<86) calcsectors=9;
-			else if (!(((len/calcsides)/512)%10)&&(((len/calcsides)/512)/10)<86) calcsectors=10;
-			else if (!(((len/calcsides)/512)%11)&&(((len/calcsides)/512)/11)<86) calcsectors=11;
-			else if (!(((len/calcsides)/512)%12)) calcsectors=12;
-            else calcsectors = 9;
+        discread(buf, 0, 512, i);
+        if (0) {
+            disk[i].phys = 0;
+            return 1;
+        }
 
-			calctracks =((len/calcsides)/512)/calcsectors;
-			if (disk[i].sides!=calcsides||disk[i].sectors!=calcsectors||disk[i].tracks!=calctracks){
-				if (disk[i].sides==calcsides&&disk[i].sectors==calcsectors){
-					disk[i].tracks=calctracks;
-					badbootsector=0;
-				}else{
-					disk[i].sides=calcsides;
-					disk[i].tracks=calctracks;
-					disk[i].sectors=calcsectors;
-					badbootsector=(i<<24)|(calcsides<<16)|(calctracks<<8)|(calcsectors);
-				}
-				
-			}else{
-				badbootsector=0;
-			}
-		}
-		fdc_status |= 0x40;
+        disk[i].head = 0;
+        disk[i].sides = (int) *(buf + 26);
+        disk[i].sectors = (int) *(buf + 24);
+        disk[i].secsize = 512;
+        if (disk[i].sectors && disk[i].sides) {
+            disk[i].tracks = (int) ((*(buf + 20) << 8) | *(buf + 19)) / (disk[i].sectors * disk[i].sides);
+        }
+
         disk[i].ejected = 0;
         disk[i].changed = 1;
-		disk[i].head = 0;
-		fdc_track = 0;
-	} else {
-         return 1;
+        disk[i].head = 0;
+        disk[i].stt = 0;
+        fdc_status |= 0x40;
+        fdc_track = 0;
+        return 0;
+    } else {
+        if (NULL != (disk[i].file = fopen (disk[i].name, "r+b")))
+        {
+            int len,len2,calcsides,calcsectors,calctracks;
+            buf=&disc[i][0];
+            fseek(disk[i].file,0,SEEK_END);
+            len=ftell(disk[i].file);
+            fseek(disk[i].file,0,SEEK_SET);
+            fread(buf,1,len,disk[i].file);
+            fclose(disk[i].file);
+            disk[i].file = NULL;
+            disk[i].disksize = len;
+            len2=MSA_UnCompress(buf);
+            if (len2) len=len2;
+            disk[i].head = 0;		
+            disk[i].stt = 0;
+    #if 0
+            if(*(int *)(buf)==0x4d455453){
+                badbootsector=0;
+                disk[i].tracks = *(unsigned short *)(buf + 10);
+                disk[i].sides = *(unsigned short *) (buf + 12);
+                disk[i].stt = 1;
+                if (*(unsigned short*)(buf + 8)!=1) {
+                    return 2;
+                }
+            } else
+    #endif
+            {
+                disk[i].head = 0;
+                disk[i].sides = (int) *(buf + 26);
+                disk[i].sectors = (int) *(buf + 24);
+                disk[i].secsize = 512; //(int) ((*(buf + 12) << 8) | *(buf + 11));
+                if (disk[i].sectors && disk[i].sides) {
+                    disk[i].tracks = (int) ((*(buf + 20) << 8) | *(buf + 19)) / (disk[i].sectors * disk[i].sides);
+                }
+                
+                // Second Check more precise 
+                if (len> (500*1024)) calcsides = 2;
+                else calcsides = 1;
+
+                if (!(((len/calcsides)/512)%9)&&(((len/calcsides)/512)/9)<86) calcsectors=9;
+                else if (!(((len/calcsides)/512)%10)&&(((len/calcsides)/512)/10)<86) calcsectors=10;
+                else if (!(((len/calcsides)/512)%11)&&(((len/calcsides)/512)/11)<86) calcsectors=11;
+                else if (!(((len/calcsides)/512)%12)) calcsectors=12;
+                else calcsectors = 9;
+
+                calctracks =((len/calcsides)/512)/calcsectors;
+                if (disk[i].sides!=calcsides||disk[i].sectors!=calcsectors||disk[i].tracks!=calctracks){
+                    if (disk[i].sides==calcsides&&disk[i].sectors==calcsectors){
+                        disk[i].tracks=calctracks;
+                        badbootsector=0;
+                    }else{
+                        disk[i].sides=calcsides;
+                        disk[i].tracks=calctracks;
+                        disk[i].sectors=calcsectors;
+                        badbootsector=(i<<24)|(calcsides<<16)|(calctracks<<8)|(calcsectors);
+                    }
+                    
+                }else{
+                    badbootsector=0;
+                }
+            }
+            fdc_status |= 0x40;
+            disk[i].ejected = 0;
+            disk[i].changed = 1;
+            disk[i].head = 0;
+            fdc_track = 0;
+        } else {
+            return 1;
+        }
     }
-	return badbootsector;
+    return badbootsector;
 }
 
 void FDCchange(int i){
-	disk[(i>>24)&0xff].sides=(i>>16)&0xff;
-	disk[(i>>24)&0xff].tracks=(i>>8)&0xff;
-	disk[(i>>24)&0xff].sectors=i&0xff;
-	
-	
+    disk[(i>>24)&0xff].sides=(i>>16)&0xff;
+    disk[(i>>24)&0xff].tracks=(i>>8)&0xff;
+    disk[(i>>24)&0xff].sectors=i&0xff;
 }
 
 void FDCeject(int num){
@@ -288,7 +325,10 @@ void FDCeject(int num){
     if (disc[num]) {
         memset(disc[num], 0, 1050*1024);
     }
-	disk[num].file = NULL;
+    if (disk[num].file) {
+        fclose(disk[num].file);
+	    disk[num].file = NULL;
+    }
 	sprintf(disk[num].name,"disk%01d",num);
 	disk[num].sides = SIDES;
 	disk[num].tracks = TRACKS;
@@ -298,7 +338,7 @@ void FDCeject(int num){
 	fdc_status |= 0x40;
 }
 
-void			FDCCommand(void)
+void FDCCommand(void)
 {
 	static char 	motor = 1;
 	int 			sides, drives,sector_found;

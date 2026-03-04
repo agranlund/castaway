@@ -211,6 +211,7 @@ struct Disk {
 	int			stt;
     short       ejected;
     short       changed;
+    short       phys;
 };
 
 extern struct   Disk disk[2];

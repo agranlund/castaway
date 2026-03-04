@@ -516,11 +516,24 @@ void QuitEmulator()
     g_running = 0;
 }
 
+
+static char temp_dskbuf[512];
 int StartEmulator(int args, char* argv[])
 {
     DBG("Init");
-    char* disk = (args > 1) ? argv[1] : DISKA;
-    strcpy(g_disk_name, disk);
+
+    /* use real floppy if possible when no image was specified */
+    g_disk_name[0] = 0;
+    if ((args == 1) && (Drvmap() & 1) /*&& Getbpb(0)*/) {
+        if (Rwabs(0, temp_dskbuf, 1, 0, 0) == 0) {
+            sprintf(g_disk_name, "rwabs.a");
+        }
+    }
+
+    if (g_disk_name[0] == 0) {
+        strcpy(g_disk_name, (args > 1) ? argv[1] : DISKA);
+    }
+
     char* ext = strrchr(g_disk_name, '.');
     if (!ext) {
         HALT("invalid disk name");
