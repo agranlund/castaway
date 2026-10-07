@@ -151,11 +151,16 @@ void Nova_SetAtariScreen(short shiftmode)
         memset(nova_cmpbuffer, 0, 64 * 1024);
 
 		stlow_planar = 0;
+#if 0
+		/* todo: this custom mode only works with the custom SVGA driver */
+		/* need to detect this vs an official NOVA driver where this is not supported */
+
 		/*if (mach_raven)*/ {
 			if (mode->nova_width == 320 && mode->nova_height == 200 && mode->nova_bpp == 8) {
 				vga_setPlanarStLow();
 			}
 		}
+#endif
 	}
 }
 
